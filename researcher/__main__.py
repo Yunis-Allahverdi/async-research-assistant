@@ -3,6 +3,8 @@
 All real logic lives in src/cli.py — this file only exists because Python's
 `-m` flag looks for a package's __main__.py.
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 from src.cli import main
 

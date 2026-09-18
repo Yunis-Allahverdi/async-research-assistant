@@ -20,6 +20,7 @@ ai/                        # provided, frozen — fetchers + synthesizer
 src/
 ├── config.py               # typed Settings (env-driven)
 ├── models.py                # SourceResult, ResearchResult, CacheEntry
+├── logging_config.py        # central logging setup
 ├── services/ai_service.py   # retry + timeout + logging + cache wrapper around ai.*
 ├── storage/cache_store.py   # filesystem JSON cache, keyed by (origin, query), TTL-aware
 ├── concurrency/orchestrator.py  # asyncio.gather fan-out, semaphore, per-source timeout
@@ -29,6 +30,7 @@ researcher/                 # `python -m researcher` entry point
 scripts/benchmark.py        # sequential vs. parallel timing benchmark
 tests/                      # offline tests (provided smoke tests + ours)
 data/research_questions.json  # sample questions for smoke runs / benchmarking
+Dockerfile                  # builds + runs the offline demo end-to-end
 ```
 
 ## Setup
@@ -50,7 +52,7 @@ cp .env.example .env
 
 | Variable | Meaning | Required? |
 |---|---|---|
-| `LLM_PROVIDER` | `anthropic` \| `openai` \| `gemini` | yes |
+| `LLM_PROVIDER` | `anthropic` \| `openai` \| `gemini` | yes (for the live CLI) |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` | key for the chosen LLM provider | yes (one) |
 | `WEB_SEARCH_PROVIDER` | `tavily` \| `serper` \| `duckduckgo` | yes |
 | `TAVILY_API_KEY` / `SERPER_API_KEY` | key for the chosen web search provider | only if not `duckduckgo` |
@@ -62,12 +64,19 @@ cp .env.example .env
 | `MIN_QUESTION_LEN` / `MAX_QUESTION_LEN` | input validation bounds | no (defaults `3` / `500`) |
 | `LOG_LEVEL` | logging verbosity | no (default `INFO`) |
 
-`duckduckgo-search` needs no API key but does need the package installed:
-```bash
-pip install duckduckgo-search
-```
+> The env file is loaded at startup via `python-dotenv`, so both the config layer and the
+> provided `ai/` layer see the same values.
 
 ## Running it
+
+The canonical, always-works demonstration is the **offline demo**, which exercises the
+full pipeline (fetch → synthesize → cited answer) on canned data with no keys or network:
+
+```bash
+python demo_ai.py --offline
+```
+
+The live CLI queries real sources:
 
 ```bash
 python -m researcher ask "What is photosynthesis?"
@@ -95,37 +104,57 @@ python -m pytest tests/ --cov=src --cov-report=term-missing
 Everything runs offline — no network calls, no API keys needed. External calls
 (`ai.fetch_*`, `ai.synthesize`) are mocked with `monkeypatch` in every test.
 
-Try the provided offline demo of the AI layer alone (no SE code involved):
-```bash
-python demo_ai.py --offline
-```
-
 ## Benchmark: sequential vs. parallel
 
 `scripts/benchmark.py` runs the same query two ways — once awaiting each source one
 after another, once via the concurrent orchestrator — always bypassing the cache so
-both runs hit the network for a fair comparison.
+both runs do the same work for a fair comparison.
 
 ```bash
 python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
 ```
 
-Measured on `<your machine, date>`:
+Measured on `<machine, date>`:
 
 ```
-sequential: X.XXs
-parallel:   Y.YYs
-speed-up:   Z.Zx
+sequential: <X.XX>s
+parallel:   <Y.YY>s
+speed-up:   <Z.Z>x
 ```
 
-*(Numbers above are a template — run the command yourself and paste your own
-output here; results depend on your network and on which web-search provider
-is configured.)*
+*(Run the command and paste your own numbers — they depend on your network and the
+configured web-search provider. Parallel wall-clock ≈ the slowest single source;
+sequential ≈ the sum of all three.)*
 
 ## Docker
 
-*Pending: `Dockerfile` has not been added to the repository yet. Once it lands, this
-section will show the `docker build` / `docker run` quick-start.*
+The image builds the project and runs the offline demo end-to-end — no API keys or
+network required.
+
+```bash
+docker build -t research-assistant .
+docker run --rm research-assistant
+```
+
+`docker run` executes `python demo_ai.py --offline` inside the container and prints the
+cited sample answers. To run the live CLI in the container instead, pass env vars:
+
+```bash
+docker run --rm -e WEB_SEARCH_PROVIDER=duckduckgo research-assistant \
+  python -m researcher ask "What is photosynthesis?"
+```
+
+## Known limitations
+
+Live source fetching is constrained by the frozen `ai/` layer, which we may not modify
+(per the assignment contract): arXiv returns HTTP 301 (the fetcher does not follow the
+http→https redirect), Wikipedia returns HTTP 403 (no `User-Agent` header is sent), and
+the pinned `duckduckgo-search` dependency was renamed to `ddgs` upstream and now returns
+no results. The full pipeline is therefore validated via the offline demo and the mocked
+test suite; graceful degradation was confirmed against the live endpoints — when every
+source fails, the system returns a clean "no sources found" result (with a note naming
+the unreachable providers) instead of crashing, after retries and per-source timeouts
+fire as designed.
 
 ## Design notes / contract
 

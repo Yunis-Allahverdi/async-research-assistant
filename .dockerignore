@@ -1,0 +1,12 @@
+# Keep the image small and clean — never copy these in.
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
+.git/
+.gitignore
+.env
+digests/
+artefacts/
+*.md
