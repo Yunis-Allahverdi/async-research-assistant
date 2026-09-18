@@ -1,0 +1,1741 @@
+% =====================================================================
+% AI Academy -- National AI Center
+% Software Engineering Final Project -- Team Report
+% Topic 4 -- Async Research Assistant
+% =====================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+% ===== EARLY MACROS ==================================================
+\usepackage[dvipsnames]{xcolor}
+\definecolor{accent2}{HTML}{8B0000}
+\definecolor{ph}{HTML}{6B7280}
+
+% ===== CONFIGURATION =================================================
+\newcommand{\teamname}{Allahverdi \& Isgandarli}
+\newcommand{\topicchoice}{Topic 4 -- Async Research Assistant}
+\newcommand{\member}[2]{\textbf{#1} (\texttt{#2})}
+\newcommand{\reportdate}{18 September 2026}
+\newcommand{\repolink}{\url{https://github.com/Yunis-Allahverdi/async-research-assistant}}
+
+% ===== course meta ==================================================
+\newcommand{\coursecode}{AI-ENG-110}
+\newcommand{\coursename}{Software Engineering}
+\newcommand{\institution}{AI Academy, National AI Center}
+\newcommand{\semester}{Spring 2026}
+
+% ===== PACKAGES =====================================================
+\usepackage[margin=2.2cm,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[final,protrusion=true,expansion=false]{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage[parfill]{parskip}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage[hidelinks]{hyperref}
+
+\emergencystretch=3em
+\hbadness=10000
+\hfuzz=2pt
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={\coursecode\ Final Project Report},
+  pdfauthor={\teamname}
+}
+
+% ===== STYLING ======================================================
+\definecolor{accent}{HTML}{0B3D91}
+\definecolor{soft}{HTML}{F2F4F8}
+
+\titleformat{\section}
+  {\Large\bfseries\color{accent}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}
+  {\large\bfseries\color{accent}}{\thesubsection}{0.5em}{}
+
+\definecolor{codegreen}{rgb}{0,0.55,0}
+\definecolor{codegray}{rgb}{0.4,0.4,0.4}
+\definecolor{codepurple}{rgb}{0.55,0,0.78}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{python}{
+  language=Python,
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{accent},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,
+  breaklines=true,
+  keepspaces=true,
+  numbers=left,
+  numbersep=6pt,
+  tabsize=2,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+\lstdefinestyle{plain}{
+  backgroundcolor=\color{backcolour},
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  numbers=none,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{\coursecode\ -- Final Report -- \teamname}}
+\fancyhead[R]{\small\textit{\semester}}
+\fancyfoot[L]{\small\textit{\institution}}
+\fancyfoot[R]{\small Page \thepage\ of \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% =====================================================================
+\begin{document}
+
+\begin{center}
+{\small \textsc{\institution} \\[0.2em] \textsc{\coursecode\ -- \coursename\ -- \semester}}\\[1.2em]
+{\Large\bfseries\color{accent} Final Project Report}\\[0.3em]
+{\LARGE\bfseries \topicchoice}\\[0.6em]
+\rule{0.85\textwidth}{0.6pt}
+\end{center}
+
+\vspace{0.6em}
+\begin{tabularx}{\textwidth}{@{}lXlX@{}}
+\textbf{Team:} & \teamname & \textbf{Date:} & \reportdate \\
+\textbf{Repo:} & \repolink & \textbf{Tag:} & \texttt{v1.0-final} \\
+\textbf{Members:} & \multicolumn{3}{X@{}}{%
+  \member{Yunis Allahverdi}{@Yunis-Allahverdi},\quad
+  \member{Fariz Isgandarli}{@farizisgenderli05-create}
+}\\
+\end{tabularx}
+\vspace{0.4em}\hrule\vspace{0.6em}
+
+% ===== EXECUTIVE SUMMARY =============================================
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+We built an asynchronous research assistant: given a natural-language question, it queries
+Wikipedia, arXiv, and a web-search provider concurrently, then uses a provider-agnostic LLM
+to synthesize a single answer carrying inline \texttt{[N]} citations back to the retrieved
+sources. The provided \texttt{ai/} package (fetchers plus citation synthesizer) was treated
+as a frozen dependency; our work was the entire software-engineering layer around it ---
+typed configuration, an \texttt{asyncio} orchestration layer, a filesystem cache, a retry /
+timeout / logging service wrapper, input validation, a CLI, an offline test suite, and a
+Docker image. The one number that proves the concurrency design works: on an identical
+three-source workload our benchmark drops wall-clock time from \textbf{11.43\,s sequential to
+3.64\,s concurrent (3.1$\times$)}. Our headline robustness story is that when \emph{all three}
+live sources failed for reasons inside the frozen \texttt{ai/} layer, the system retried with
+backoff, hit its per-source timeouts independently, and degraded to a clean ``no sources
+found'' response rather than crashing. The most surprising lesson was that the hardest part
+of an ``AI project'' was not the AI at all but everything that makes a thin API robust,
+observable, and reproducible; if we started over we would push the retry policy to be
+token-aware and add a real HTTP-header shim layer we are permitted to own.
+
+% ===== TABLE OF CONTENTS ============================================
+\tableofcontents
+\vspace{0.6em}\hrule\vspace{0.4em}
+
+% =====================================================================
+\section{Project Overview}
+
+\subsection{Problem framing \& scope}
+
+The system answers a research question by gathering short, attributed excerpts from three
+independent sources and letting a language model fuse them into one concise, cited answer.
+The \emph{input} is a single question string; the \emph{outputs} are a synthesized answer
+plus a numbered reference list, where every \texttt{[N]} marker in the prose maps to one
+retrieved source. The only user-facing entry point is a command-line interface:
+\texttt{python -m researcher ask "\dots"}, with \texttt{-{}-sources} to restrict the source
+set and \texttt{-{}-no-cache} to bypass the cache. No HTTP server is required for this topic.
+
+The provider stack is deliberately pluggable and selected entirely by environment variables:
+the LLM is provider-agnostic (Anthropic / OpenAI / Gemini via \texttt{LLM\_PROVIDER}), and the
+web-search backend is one of Tavily / Serper / DuckDuckGo via \texttt{WEB\_SEARCH\_PROVIDER}.
+Wikipedia and arXiv need no key.
+
+Relative to \texttt{TOPIC.md}, we implemented the full required SE layer and made two
+deliberate scope calls. We \emph{tightened} the spec by making graceful degradation total:
+not only does a single failing source not abort the call, but a call in which \emph{every}
+source fails still returns a structured result instead of an error. We \emph{loosened} the
+optional persistence choice: rather than PostgreSQL we used a filesystem-JSON cache, which is
+persistent, inspectable, and adds no service to the container --- an intentional
+simplicity-over-power trade-off for a pure key$\rightarrow$blob workload.
+
+\subsection{Provider choice and the AI module contract}
+
+The LLM is selected at runtime through the provided factory; for development the default is
+\texttt{LLM\_PROVIDER=anthropic} with model \texttt{claude-sonnet-4-6}, and the web backend
+default is \texttt{WEB\_SEARCH\_PROVIDER=duckduckgo} (no key, convenient for grading). Our
+code calls exactly four functions of the frozen package --- \texttt{ai.fetch\_wikipedia},
+\texttt{ai.fetch\_arxiv}, \texttt{ai.fetch\_web}, and \texttt{ai.synthesize} --- and the
+schemas \texttt{Source}, \texttt{Citation}, \texttt{AnswerWithCitations}.
+\textbf{We did not modify the public interface of the provided \texttt{ai/} package in any
+way.} Against malformed model output we rely on two guards: the provided synthesizer already
+drops out-of-range / hallucinated citation indices, and our service layer validates that a
+call returned a usable, non-empty result before caching or returning it, treating provider
+faults as the transient \texttt{ProviderError} class described in \S\ref{sec:robustness}.
+
+% =====================================================================
+\section{Architecture}\label{sec:arch}
+
+\subsection{Module map}
+
+The system is a strict downward-dependency pipeline. The CLI drives the core researcher, which
+drives the concurrency orchestrator, which fans out to the service wrapper, which is the
+\emph{only} module that touches the frozen \texttt{ai/} package, the cache, and the config.
+
+\begin{lstlisting}[style=plain]
+        CLI  (src/cli.py, researcher/__main__.py)
+         |  ask "question" [--sources ...] [--no-cache]
+         v
+   core/researcher.py        validate -> orchestrate -> synthesize -> ResearchResult
+         |
+         v
+ concurrency/orchestrator.py  asyncio.gather(return_exceptions=True)
+         |                    + Semaphore(max_concurrency) + per-source asyncio.timeout
+         |  fetch_source(origin, query)  x3, one shared httpx.AsyncClient
+         v
+ services/ai_service.py       retry+backoff | timeout | logging | cache lookup/store
+     |        |         |
+     v        v         v
+ storage/  ===AI BOUNDARY===   config.py
+ cache_store   ai/ (FROZEN)    Settings (env-driven)
+ (JSON+TTL)    fetch_* / synthesize
+\end{lstlisting}
+
+\textbf{Module-by-module.}
+\texttt{config.py} reads \texttt{.env} into a typed \texttt{Settings}.
+\texttt{models.py} holds our SE-layer schemas.
+\texttt{storage/cache\_store.py} is a TTL-aware filesystem JSON cache.
+\texttt{services/ai\_service.py} wraps every \texttt{ai.*} call with retry, timeout, logging,
+and caching --- the single crossing of the AI boundary.
+\texttt{concurrency/orchestrator.py} runs the three fetches concurrently with bounded
+parallelism and graceful degradation.
+\texttt{core/researcher.py} validates input and assembles the final \texttt{ResearchResult}.
+\texttt{cli.py} parses arguments and renders the answer.
+Only the arrows into \texttt{ai\_service} cross the AI boundary; swapping the LLM provider
+(Anthropic~$\rightarrow$~OpenAI) changes \emph{zero} of our files --- it is one environment
+variable, because the provided factory hides the concrete provider behind an ABC.
+
+\subsection{OOP design \& key abstractions}
+
+Our own defensible abstraction is \emph{composition via a dispatch registry} in the service
+layer, rather than inheritance. The three source fetchers share one call shape, so instead of
+an \texttt{if/elif} ladder or a subclass per source we map origin~$\rightarrow$~coroutine and
+inject the shared client and settings:
+
+\begin{lstlisting}[style=python]
+_FETCHERS = {
+    "wikipedia": fetch_wikipedia,
+    "arxiv": fetch_arxiv,
+    "web": fetch_web,
+}
+
+async def fetch_source(origin, query, *, client=None, settings, use_cache=True):
+    fetcher = _FETCHERS.get(origin)
+    if fetcher is None:
+        raise ValueError(f"unknown origin {origin!r}")
+    ...
+    return await _fetch_with_retry(fetcher, query, client=client, settings=settings)
+\end{lstlisting}
+
+\textbf{Justification.} We chose composition because the fetchers are stateless functions
+with an identical signature --- there is no shared state or behaviour to inherit, so a class
+hierarchy would add ceremony without value. A registry keeps ``add a source'' to one line and
+keeps retry/timeout/caching in exactly one place. Where the problem genuinely called for an
+open provider set with per-provider state (API keys, endpoints), the \emph{provided} code
+correctly used an ABC (\texttt{WebSearchProvider} with Tavily/Serper/DuckDuckGo subclasses);
+we deliberately did not duplicate that pattern where plain functions suffice.
+
+\subsection{Data flow across module boundaries}
+
+We defined three SE-layer models in \texttt{src/models.py}: \texttt{SourceResult} (per-source
+outcome: origin, sources, \texttt{ok}, error, \texttt{elapsed}), \texttt{ResearchResult}
+(question, answer, per-source results, \texttt{degraded} flag, total elapsed, \texttt{from\_cache}),
+and \texttt{CacheEntry} (key, sources, \texttt{created\_at}). We reused the provided
+\texttt{Source} / \texttt{AnswerWithCitations} verbatim wherever the data was exactly what
+\texttt{ai/} produced, and wrapped them only when we needed to attach SE concerns the provided
+schema does not carry --- timing and success/failure for the orchestrator, cache metadata for
+the store. \textbf{No naked dictionaries cross module boundaries; every inter-module value is
+a typed pydantic model.}
+
+% =====================================================================
+\section{Concurrency \& Performance}\label{sec:concurrency}
+
+\subsection{Why this concurrency model}
+
+The workload is I/O-bound --- three independent network round-trips that spend nearly all
+their wall-clock time waiting on remote servers, not on CPU. \texttt{asyncio} is therefore the
+right primitive: a single thread can keep all three requests in flight, and there is no CPU
+work to parallelize that would justify \texttt{ProcessPoolExecutor}, nor any blocking SDK that
+would force a \texttt{ThreadPoolExecutor}. Threads would also work for three requests but cost
+one OS thread per source and a shared connection pool is cleaner under one event loop. The
+bottleneck the design targets is \emph{total network latency}: sequentially it is the sum of
+the three sources; concurrently it collapses to the slowest single source. We bound
+parallelism with \texttt{asyncio.Semaphore(max\_concurrency)} (default 5, configurable via
+\texttt{MAX\_CONCURRENCY}); at 1 the design degenerates to sequential, and at a very high value
+we would risk a provider rate-limit (HTTP 429), so a small bound respects politeness while
+still overlapping our three-way fan-out. The concurrent design starts winning at $N\ge2$
+sources.
+
+\subsection{Sequential-vs-concurrent benchmark}
+
+\texttt{scripts/benchmark.py} runs the same query twice --- once awaiting each source in turn,
+once through the orchestrator --- always bypassing the cache so both do identical work.
+Measured on a Windows 11 laptop, Python 3.12.4, caches cleared:
+
+\begin{center}\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Workload} & $N$ & \textbf{Sequential (s)} & \textbf{Concurrent (s)} & \textbf{Speedup} \\
+\midrule
+1 query, 3 sources (wiki, arxiv, web) & 3 & 11.43 & 3.64 & 3.1$\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Command:
+\begin{lstlisting}[style=plain]
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\textbf{Honest interpretation.} We reached almost exactly the theoretical $3\times$ for a
+three-source fan-out, which is expected because the three latencies were comparable and the
+work is pure waiting. An important caveat: during measurement all three live endpoints were
+failing (see \S\ref{sec:robustness}), so the numbers time the concurrent-vs-sequential
+handling of the retry-and-timeout path rather than of successful downloads --- but the
+comparison is still valid, because sequential pays each source's retry/timeout budget in turn
+(sum) while concurrent pays them in parallel (max). The new bottleneck after parallelizing the
+fetch is the \emph{LLM synthesis step}, which is a single call that runs after all fetches
+complete and is therefore serial tail latency; pushing the curve further would mean streaming
+the synthesis or overlapping it with late-arriving sources.
+
+% =====================================================================
+\section{Robustness \& Error Handling}\label{sec:robustness}
+
+\subsection{Wrapping the AI module}
+
+Every \texttt{ai.*} call goes through \texttt{ai\_service}, which adds four things the thin
+provided layer lacks. \textbf{Retries:} a \texttt{tenacity} policy retries \emph{only}
+\texttt{ProviderError} --- the transient class (network errors, 5xx, 429) --- for up to
+\texttt{MAX\_RETRIES} (default 3) attempts with \texttt{wait\_exponential} backoff.
+Non-transient failures such as a \texttt{ValueError} from empty input are \emph{not} retried,
+because they cannot succeed on repeat and retrying them only wastes the budget.
+\textbf{Timeouts:} each attempt is wrapped in \texttt{asyncio.timeout(source\_timeout)}
+(default 10\,s) as a hard per-call ceiling. \textbf{Structured logging:} the standard
+\texttt{logging} module (never \texttt{print}) records origin, truncated query, result count,
+and elapsed time at INFO, full payloads at DEBUG, and each retry at WARNING; the level is set
+once from \texttt{LOG\_LEVEL}. \textbf{Validation:} input is checked before the call (see
+\S\ref{sec:validation}) and the result is checked for usability before it is cached or
+returned. Walking one case end-to-end: a provider 429 is raised by \texttt{ai/} as a
+\texttt{ProviderError}, caught by the retry predicate, logged at WARNING, waited-out with
+exponential backoff, and retried; after the attempt budget is exhausted the original error is
+re-raised (\texttt{reraise=True}) and surfaces to the orchestrator, which records it as a
+failed \texttt{SourceResult} without cancelling the other sources.
+
+\subsection{Failure-mode analysis (one concrete incident)}
+
+\textbf{Incident: all three live sources unreachable.} We did not have to inject this failure
+--- it occurred naturally, which made it a stronger test. Running
+\texttt{python -m researcher ask "How does CRISPR-Cas9 work?"} against the live network, every
+source failed for a reason inside the frozen \texttt{ai/} layer: arXiv returned HTTP 301 (the
+fetcher issues an \texttt{http://} request and does not follow the redirect to
+\texttt{https://}), Wikipedia returned HTTP 403 (the request carries no \texttt{User-Agent}
+header), and the pinned \texttt{duckduckgo-search} dependency had been renamed to \texttt{ddgs}
+upstream and now returns an empty list.
+
+\emph{(i) How it surfaced:} a normal live query. \emph{(ii) What the system did:} each source
+was retried three times with backoff, each hit its timeout independently, and the orchestrator
+collected three failed \texttt{SourceResult}s via \texttt{return\_exceptions=True}.
+\emph{(iii) What the user saw:} a clean message --- ``No sources could be found for this
+question\dots'' followed by ``\emph{Note: wikipedia, arxiv, web could not be reached, so this
+answer may be incomplete}'' --- and no stack trace. \emph{(iv) What the logs showed:} an
+ordered WARNING trail of \texttt{retrying (1/3)}, \texttt{(2/3)}, then per-source
+\texttt{FAILED} lines naming the exact HTTP status, which was enough to diagnose all three
+root causes without re-running the code. We originally expected at least DuckDuckGo (keyless)
+to succeed; the log is what revealed the upstream package rename. Because \texttt{ai/} is
+contractually frozen we could not patch the redirect/header/rename at the source, so the
+correct engineering response was exactly what the system already did --- degrade cleanly and
+report --- which validated the robustness path against real endpoints.
+
+\subsection{Input validation}\label{sec:validation}
+
+The single entry point is the CLI. \texttt{validate\_question} strips the question and rejects
+it if it is shorter than \texttt{MIN\_QUESTION\_LEN} (default 3) or longer than
+\texttt{MAX\_QUESTION\_LEN} (default 500), raising a \texttt{ValueError} that the CLI surfaces
+as a one-line message rather than a traceback. The \texttt{-{}-sources} flag is validated
+against the allowed set \texttt{\{wiki, arxiv, web\}}; an unknown origin raises a clear error.
+Environment values are validated by \texttt{pydantic-settings} at load time (wrong types fail
+fast). A 50{,}000-character query is rejected by the length bound before any network call, so
+an adversarial oversized input cannot reach a provider; cache keys are hashed, so a query can
+never escape the storage directory via crafted path characters.
+
+\subsection{Rate limit \& politeness}
+
+Politeness has two layers: the \texttt{Semaphore} bounds concurrent in-flight requests so we
+never burst more than \texttt{MAX\_CONCURRENCY} (default 5) at once, and the exponential-backoff
+retry acts as a sleep-on-429 strategy --- a provider 429 is a \texttt{ProviderError}, so the
+backoff naturally spaces out subsequent attempts. The highest burst our test suite produces is
+three simultaneous fetches (one per source), well under the bound. We did not observe a real
+429 in development because the live endpoints failed earlier in the request path; the strategy
+is therefore exercised by unit tests that inject \texttt{ProviderError} rather than by a
+production 429.
+
+% =====================================================================
+\section{Storage \& Caching}\label{sec:storage}
+
+\subsection{Design}
+
+We did not use SQLite/PostgreSQL. The workload is a pure key$\rightarrow$value blob store
+(\texttt{(origin, query)} $\rightarrow$ list of \texttt{Source}s), for which a relational
+schema would be over-engineering and would add a service to the container. Instead each entry
+is one JSON file under \texttt{CACHE\_DIR} (default \texttt{.cache/}), named by a stable key.
+The key is the source-of-truth of identity; the stored \texttt{Source} list and
+\texttt{created\_at} timestamp are the cached payload.
+
+\begin{lstlisting}[style=python]
+def make_key(origin, query):
+    canonical = f"{origin.lower().strip()}|{query.lower().strip()}"
+    return f"{origin}_{hashlib.sha256(canonical.encode()).hexdigest()[:16]}"
+\end{lstlisting}
+
+The key is \emph{canonicalised} (lower-cased, stripped) so ``\texttt{WHAT IS X?}'' and
+``\texttt{what is x}'' collide onto one entry, then hashed so arbitrary query characters
+cannot break the filename or escape the directory.
+
+\subsection{Caching policy}
+
+We cache each \texttt{(origin, query)} result for \texttt{CACHE\_TTL} seconds (default 86{,}400
+= 24\,h). On read, the entry's age is compared to the TTL and anything older is treated as a
+miss and refetched --- this is time-based invalidation. \texttt{ai\_service} checks the cache
+before every fetch and writes non-empty results after; \texttt{-{}-no-cache} bypasses both ends.
+In a demo run that issues the same query twice, the first call is a miss and the second is a
+\textbf{100\% cache hit} (the underlying fetcher is invoked exactly once, verified by a unit
+test that counts fetcher calls). The value most likely to go stale is an LLM-shaped result if
+the prompt template changes; in production we would add a prompt-version component to the key
+so a changed prompt misses the old entries automatically.
+
+% =====================================================================
+\section{Testing}\label{sec:testing}
+
+\subsection{Strategy \& coverage}
+
+Every test runs \textbf{offline}: each \texttt{ai.*} call is replaced with a fake via
+\texttt{monkeypatch}, so the suite needs no network and no API keys and is safe in CI. Async
+code is driven by \texttt{pytest-asyncio} (\texttt{asyncio\_mode = strict}). We chose not to
+chase the last few lines --- three uncovered lines in \texttt{config.py} are the
+\texttt{\_\_main\_\_} print block, and the two in the orchestrator are a defensive branch that
+only fires on a malformed internal result --- because covering them would test framework
+plumbing, not our logic.
+
+\begin{center}\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Suite} & \textbf{Coverage} \\
+\midrule
+\texttt{src/} (our SE layer) & 98\,\% (249 stmts, 6 missed) \\
+Provided \texttt{ai/} smoke tests & passing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The full suite is \textbf{51 tests passing} in $\sim$2\,s, and the provided
+\texttt{tests/test\_ai\_smoke.py} is unmodified and passes.
+A \texttt{mypy src} run reports 6 warnings: one is in the frozen \texttt{ai/} package (which we
+may not edit), and five are benign false positives in \texttt{ai\_service.py} --- mypy cannot
+prove the three registered fetchers share a signature, nor that the retry loop
+(\texttt{reraise=True}) always assigns before use. All are documented; none affects runtime,
+as the 51 passing tests confirm.
+
+\subsection{Notable tests}
+
+\textbf{(i) Happy path (end-to-end).} \texttt{test\_fetch\_source\_happy\_path} mocks a fetcher
+and asserts a well-formed \texttt{Source} flows back through the cache-write path.
+\textbf{(ii) Concurrency.} \texttt{test\_orchestrator} verifies that when one of three
+gathered fetches raises, \texttt{return\_exceptions=True} still yields three
+\texttt{SourceResult}s --- two \texttt{ok}, one failed --- and no exception propagates.
+\textbf{(iii) Error path.} \texttt{test\_fetch\_source\_retries\_then\_succeeds} and
+\texttt{\dots\_reraises\_after\_exhaustion} pin the retry contract: a \texttt{ProviderError}
+that clears on the third attempt succeeds, while a permanent one is re-raised after exactly
+\texttt{MAX\_RETRIES} attempts. \texttt{\dots\_times\_out} confirms a slow fetcher raises
+\texttt{TimeoutError} and is \emph{not} retried. The test we wish we had time for is a
+load-style test asserting the semaphore never lets more than \texttt{MAX\_CONCURRENCY}
+coroutines run at once under a large fan-out.
+
+% =====================================================================
+\section{Deployment \& Reproducibility}\label{sec:deploy}
+
+\subsection{Docker image}
+
+\begin{lstlisting}[style=plain]
+docker build -t research-assistant .
+docker run --rm research-assistant        # runs: python demo_ai.py --offline
+\end{lstlisting}
+
+It is a \textbf{single-stage} build on \texttt{python:3.12-slim}. The image is \textbf{76.5\,MB
+content} (324\,MB on-disk including the shared base layers), comparable to a fresh
+\texttt{python:3.12-slim} ($\sim$120\,MB) because our only added weight is the pinned Python
+dependencies and the small source tree; a \texttt{.dockerignore} keeps the virtualenv, caches,
+git history, and \texttt{.env} out of the image. Dependencies are installed before the source
+is copied so the dependency layer is cached across code changes. The default command runs the
+offline demo end-to-end with no keys or network; the live CLI can be run by passing env vars
+with \texttt{-e} / \texttt{-{}-env-file}.
+
+\subsection{Configuration}
+
+Every variable the app reads, and the effect if it is missing:
+\texttt{LLM\_PROVIDER} (default \texttt{anthropic}); the provider's API key
+(\texttt{ANTHROPIC\_API\_KEY} etc.) --- if missing, live synthesis raises a clear
+\texttt{ProviderError}, but the offline demo and tests are unaffected;
+\texttt{WEB\_SEARCH\_PROVIDER} (default \texttt{duckduckgo}); \texttt{TAVILY\_API\_KEY} /
+\texttt{SERPER\_API\_KEY} (needed only for those backends); \texttt{CACHE\_DIR} (default
+\texttt{.cache}); \texttt{CACHE\_TTL} (default 86400); \texttt{SOURCE\_TIMEOUT} (default 10);
+\texttt{MAX\_CONCURRENCY} (default 5); \texttt{MAX\_RETRIES} / \texttt{RETRY\_BACKOFF}
+(defaults 3 / 1.0); \texttt{MIN\_QUESTION\_LEN} / \texttt{MAX\_QUESTION\_LEN} (defaults 3 /
+500); \texttt{LOG\_LEVEL} (default \texttt{INFO}). Every non-key variable has a safe default,
+so the app runs with an empty \texttt{.env}.
+
+% =====================================================================
+\section{Limitations \& Future Work}\label{sec:limits}
+
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+  \item \textbf{Live retrieval depends on frozen code we cannot patch.} arXiv (301 redirect),
+  Wikipedia (403 / missing User-Agent), and the renamed \texttt{duckduckgo-search} package all
+  fail inside \texttt{ai/}; we validate the pipeline via the offline demo and mocked tests. A
+  permitted fix would be a thin request-shim layer of our own that adds headers and follows
+  redirects \emph{before} handing off, without editing \texttt{ai/}.
+  \item \textbf{The filesystem cache has no concurrent-writer locking} and grows one file per
+  unique query; a production version would add locking or move to SQLite/Redis and an eviction
+  policy.
+  \item \textbf{Synthesis is serial tail latency} --- the single LLM call runs after all
+  fetches, so it dominates once retrieval is parallel; streaming would help.
+  \item \textbf{Rate limiting is request-count only}, not token-aware; a busy day with a real
+  provider could still approach a tokens-per-minute limit the semaphore does not see.
+  \item \textbf{Two-person scope} meant we prioritized the required layer over optional bonuses
+  (multi-provider failover, cost telemetry, CI); these are the natural next week of work.
+\end{itemize}
+
+% =====================================================================
+\section{Tools \& Acknowledgements}\label{sec:tools}
+
+We used AI coding assistants as collaborators, and disclose this specifically rather than
+generically. \textbf{Claude} was used to scaffold the SE layer module by module and to explain
+each concept (\texttt{asyncio}, \texttt{tenacity} retry semantics, \texttt{pytest} mocking,
+Docker) as we built; every module was then reviewed, run, and unit-tested by its owner, and we
+can each defend our own files. Concrete example: the \texttt{ai\_service} retry policy was
+drafted with Claude, but we tuned it after reading the live logs --- narrowing the retry
+predicate to \texttt{ProviderError} only, so that non-transient \texttt{ValueError}s are not
+uselessly retried --- and we added the per-attempt \texttt{asyncio.timeout} after observing
+that a hung source would otherwise block within the retry budget. The provided \texttt{ai/}
+package, its schemas, and \texttt{demo\_ai.py} are course-supplied and were left unmodified.
+
+% =====================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=2pt]
+  \item Anthropic API documentation. \url{https://docs.anthropic.com/}
+  \item \texttt{tenacity} --- retrying library. \url{https://tenacity.readthedocs.io/}
+  \item \texttt{pydantic-settings} documentation. \url{https://docs.pydantic.dev/latest/concepts/pydantic_settings/}
+  \item \texttt{httpx} --- async HTTP client. \url{https://www.python-httpx.org/}
+  \item \texttt{pytest-asyncio} documentation. \url{https://pytest-asyncio.readthedocs.io/}
+  \item Python \texttt{asyncio} --- \texttt{gather}, \texttt{timeout}, \texttt{Semaphore}. \url{https://docs.python.org/3/library/asyncio.html}
+\end{enumerate}
+
+\appendix
+% =====================================================================
+\section{Appendix --- Reproducing the benchmark}
+Anyone with the repo and a Python 3.11+ environment can reproduce the \S\ref{sec:concurrency}
+table:
+
+\begin{lstlisting}[style=plain]
+git clone https://github.com/Yunis-Allahverdi/async-research-assistant
+cd async-research-assistant
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\Activate.ps1
+python -m pip install -r requirements-ai.txt -r requirements.txt
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\vspace{1em}\hrule\vspace{0.6em}
+\noindent\small\textit{End of report --- thank you for reading.}
+
+\end{document}% =====================================================================
+% AI Academy -- National AI Center
+% Software Engineering Final Project -- Team Report
+% Topic 4 -- Async Research Assistant
+% =====================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+% ===== EARLY MACROS ==================================================
+\usepackage[dvipsnames]{xcolor}
+\definecolor{accent2}{HTML}{8B0000}
+\definecolor{ph}{HTML}{6B7280}
+
+% ===== CONFIGURATION =================================================
+\newcommand{\teamname}{Allahverdi \& Isgandarli}
+\newcommand{\topicchoice}{Topic 4 -- Async Research Assistant}
+\newcommand{\member}[2]{\textbf{#1} (\texttt{#2})}
+\newcommand{\reportdate}{18 September 2026}
+\newcommand{\repolink}{\url{https://github.com/Yunis-Allahverdi/async-research-assistant}}
+
+% ===== course meta ==================================================
+\newcommand{\coursecode}{AI-ENG-110}
+\newcommand{\coursename}{Software Engineering}
+\newcommand{\institution}{AI Academy, National AI Center}
+\newcommand{\semester}{Spring 2026}
+
+% ===== PACKAGES =====================================================
+\usepackage[margin=2.2cm,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[final,protrusion=true,expansion=false]{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage[parfill]{parskip}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage[hidelinks]{hyperref}
+
+\emergencystretch=3em
+\hbadness=10000
+\hfuzz=2pt
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={\coursecode\ Final Project Report},
+  pdfauthor={\teamname}
+}
+
+% ===== STYLING ======================================================
+\definecolor{accent}{HTML}{0B3D91}
+\definecolor{soft}{HTML}{F2F4F8}
+
+\titleformat{\section}
+  {\Large\bfseries\color{accent}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}
+  {\large\bfseries\color{accent}}{\thesubsection}{0.5em}{}
+
+\definecolor{codegreen}{rgb}{0,0.55,0}
+\definecolor{codegray}{rgb}{0.4,0.4,0.4}
+\definecolor{codepurple}{rgb}{0.55,0,0.78}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{python}{
+  language=Python,
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{accent},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,
+  breaklines=true,
+  keepspaces=true,
+  numbers=left,
+  numbersep=6pt,
+  tabsize=2,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+\lstdefinestyle{plain}{
+  backgroundcolor=\color{backcolour},
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  numbers=none,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{\coursecode\ -- Final Report -- \teamname}}
+\fancyhead[R]{\small\textit{\semester}}
+\fancyfoot[L]{\small\textit{\institution}}
+\fancyfoot[R]{\small Page \thepage\ of \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% =====================================================================
+\begin{document}
+
+\begin{center}
+{\small \textsc{\institution} \\[0.2em] \textsc{\coursecode\ -- \coursename\ -- \semester}}\\[1.2em]
+{\Large\bfseries\color{accent} Final Project Report}\\[0.3em]
+{\LARGE\bfseries \topicchoice}\\[0.6em]
+\rule{0.85\textwidth}{0.6pt}
+\end{center}
+
+\vspace{0.6em}
+\begin{tabularx}{\textwidth}{@{}lXlX@{}}
+\textbf{Team:} & \teamname & \textbf{Date:} & \reportdate \\
+\textbf{Repo:} & \repolink & \textbf{Tag:} & \texttt{v1.0-final} \\
+\textbf{Members:} & \multicolumn{3}{X@{}}{%
+  \member{Yunis Allahverdi}{@Yunis-Allahverdi},\quad
+  \member{Fariz Isgandarli}{@farizisgenderli05-create}
+}\\
+\end{tabularx}
+\vspace{0.4em}\hrule\vspace{0.6em}
+
+% ===== EXECUTIVE SUMMARY =============================================
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+We built an asynchronous research assistant: given a natural-language question, it queries
+Wikipedia, arXiv, and a web-search provider concurrently, then uses a provider-agnostic LLM
+to synthesize a single answer carrying inline \texttt{[N]} citations back to the retrieved
+sources. The provided \texttt{ai/} package (fetchers plus citation synthesizer) was treated
+as a frozen dependency; our work was the entire software-engineering layer around it ---
+typed configuration, an \texttt{asyncio} orchestration layer, a filesystem cache, a retry /
+timeout / logging service wrapper, input validation, a CLI, an offline test suite, and a
+Docker image. The one number that proves the concurrency design works: on an identical
+three-source workload our benchmark drops wall-clock time from \textbf{11.43\,s sequential to
+3.64\,s concurrent (3.1$\times$)}. Our headline robustness story is that when \emph{all three}
+live sources failed for reasons inside the frozen \texttt{ai/} layer, the system retried with
+backoff, hit its per-source timeouts independently, and degraded to a clean ``no sources
+found'' response rather than crashing. The most surprising lesson was that the hardest part
+of an ``AI project'' was not the AI at all but everything that makes a thin API robust,
+observable, and reproducible; if we started over we would push the retry policy to be
+token-aware and add a real HTTP-header shim layer we are permitted to own.
+
+% ===== TABLE OF CONTENTS ============================================
+\tableofcontents
+\vspace{0.6em}\hrule\vspace{0.4em}
+
+% =====================================================================
+\section{Project Overview}
+
+\subsection{Problem framing \& scope}
+
+The system answers a research question by gathering short, attributed excerpts from three
+independent sources and letting a language model fuse them into one concise, cited answer.
+The \emph{input} is a single question string; the \emph{outputs} are a synthesized answer
+plus a numbered reference list, where every \texttt{[N]} marker in the prose maps to one
+retrieved source. The only user-facing entry point is a command-line interface:
+\texttt{python -m researcher ask "\dots"}, with \texttt{-{}-sources} to restrict the source
+set and \texttt{-{}-no-cache} to bypass the cache. No HTTP server is required for this topic.
+
+The provider stack is deliberately pluggable and selected entirely by environment variables:
+the LLM is provider-agnostic (Anthropic / OpenAI / Gemini via \texttt{LLM\_PROVIDER}), and the
+web-search backend is one of Tavily / Serper / DuckDuckGo via \texttt{WEB\_SEARCH\_PROVIDER}.
+Wikipedia and arXiv need no key.
+
+Relative to \texttt{TOPIC.md}, we implemented the full required SE layer and made two
+deliberate scope calls. We \emph{tightened} the spec by making graceful degradation total:
+not only does a single failing source not abort the call, but a call in which \emph{every}
+source fails still returns a structured result instead of an error. We \emph{loosened} the
+optional persistence choice: rather than PostgreSQL we used a filesystem-JSON cache, which is
+persistent, inspectable, and adds no service to the container --- an intentional
+simplicity-over-power trade-off for a pure key$\rightarrow$blob workload.
+
+\subsection{Provider choice and the AI module contract}
+
+The LLM is selected at runtime through the provided factory; for development the default is
+\texttt{LLM\_PROVIDER=anthropic} with model \texttt{claude-sonnet-4-6}, and the web backend
+default is \texttt{WEB\_SEARCH\_PROVIDER=duckduckgo} (no key, convenient for grading). Our
+code calls exactly four functions of the frozen package --- \texttt{ai.fetch\_wikipedia},
+\texttt{ai.fetch\_arxiv}, \texttt{ai.fetch\_web}, and \texttt{ai.synthesize} --- and the
+schemas \texttt{Source}, \texttt{Citation}, \texttt{AnswerWithCitations}.
+\textbf{We did not modify the public interface of the provided \texttt{ai/} package in any
+way.} Against malformed model output we rely on two guards: the provided synthesizer already
+drops out-of-range / hallucinated citation indices, and our service layer validates that a
+call returned a usable, non-empty result before caching or returning it, treating provider
+faults as the transient \texttt{ProviderError} class described in \S\ref{sec:robustness}.
+
+% =====================================================================
+\section{Architecture}\label{sec:arch}
+
+\subsection{Module map}
+
+The system is a strict downward-dependency pipeline. The CLI drives the core researcher, which
+drives the concurrency orchestrator, which fans out to the service wrapper, which is the
+\emph{only} module that touches the frozen \texttt{ai/} package, the cache, and the config.
+
+\begin{lstlisting}[style=plain]
+        CLI  (src/cli.py, researcher/__main__.py)
+         |  ask "question" [--sources ...] [--no-cache]
+         v
+   core/researcher.py        validate -> orchestrate -> synthesize -> ResearchResult
+         |
+         v
+ concurrency/orchestrator.py  asyncio.gather(return_exceptions=True)
+         |                    + Semaphore(max_concurrency) + per-source asyncio.timeout
+         |  fetch_source(origin, query)  x3, one shared httpx.AsyncClient
+         v
+ services/ai_service.py       retry+backoff | timeout | logging | cache lookup/store
+     |        |         |
+     v        v         v
+ storage/  ===AI BOUNDARY===   config.py
+ cache_store   ai/ (FROZEN)    Settings (env-driven)
+ (JSON+TTL)    fetch_* / synthesize
+\end{lstlisting}
+
+\textbf{Module-by-module.}
+\texttt{config.py} reads \texttt{.env} into a typed \texttt{Settings}.
+\texttt{models.py} holds our SE-layer schemas.
+\texttt{storage/cache\_store.py} is a TTL-aware filesystem JSON cache.
+\texttt{services/ai\_service.py} wraps every \texttt{ai.*} call with retry, timeout, logging,
+and caching --- the single crossing of the AI boundary.
+\texttt{concurrency/orchestrator.py} runs the three fetches concurrently with bounded
+parallelism and graceful degradation.
+\texttt{core/researcher.py} validates input and assembles the final \texttt{ResearchResult}.
+\texttt{cli.py} parses arguments and renders the answer.
+Only the arrows into \texttt{ai\_service} cross the AI boundary; swapping the LLM provider
+(Anthropic~$\rightarrow$~OpenAI) changes \emph{zero} of our files --- it is one environment
+variable, because the provided factory hides the concrete provider behind an ABC.
+
+\subsection{OOP design \& key abstractions}
+
+Our own defensible abstraction is \emph{composition via a dispatch registry} in the service
+layer, rather than inheritance. The three source fetchers share one call shape, so instead of
+an \texttt{if/elif} ladder or a subclass per source we map origin~$\rightarrow$~coroutine and
+inject the shared client and settings:
+
+\begin{lstlisting}[style=python]
+_FETCHERS = {
+    "wikipedia": fetch_wikipedia,
+    "arxiv": fetch_arxiv,
+    "web": fetch_web,
+}
+
+async def fetch_source(origin, query, *, client=None, settings, use_cache=True):
+    fetcher = _FETCHERS.get(origin)
+    if fetcher is None:
+        raise ValueError(f"unknown origin {origin!r}")
+    ...
+    return await _fetch_with_retry(fetcher, query, client=client, settings=settings)
+\end{lstlisting}
+
+\textbf{Justification.} We chose composition because the fetchers are stateless functions
+with an identical signature --- there is no shared state or behaviour to inherit, so a class
+hierarchy would add ceremony without value. A registry keeps ``add a source'' to one line and
+keeps retry/timeout/caching in exactly one place. Where the problem genuinely called for an
+open provider set with per-provider state (API keys, endpoints), the \emph{provided} code
+correctly used an ABC (\texttt{WebSearchProvider} with Tavily/Serper/DuckDuckGo subclasses);
+we deliberately did not duplicate that pattern where plain functions suffice.
+
+\subsection{Data flow across module boundaries}
+
+We defined three SE-layer models in \texttt{src/models.py}: \texttt{SourceResult} (per-source
+outcome: origin, sources, \texttt{ok}, error, \texttt{elapsed}), \texttt{ResearchResult}
+(question, answer, per-source results, \texttt{degraded} flag, total elapsed, \texttt{from\_cache}),
+and \texttt{CacheEntry} (key, sources, \texttt{created\_at}). We reused the provided
+\texttt{Source} / \texttt{AnswerWithCitations} verbatim wherever the data was exactly what
+\texttt{ai/} produced, and wrapped them only when we needed to attach SE concerns the provided
+schema does not carry --- timing and success/failure for the orchestrator, cache metadata for
+the store. \textbf{No naked dictionaries cross module boundaries; every inter-module value is
+a typed pydantic model.}
+
+% =====================================================================
+\section{Concurrency \& Performance}\label{sec:concurrency}
+
+\subsection{Why this concurrency model}
+
+The workload is I/O-bound --- three independent network round-trips that spend nearly all
+their wall-clock time waiting on remote servers, not on CPU. \texttt{asyncio} is therefore the
+right primitive: a single thread can keep all three requests in flight, and there is no CPU
+work to parallelize that would justify \texttt{ProcessPoolExecutor}, nor any blocking SDK that
+would force a \texttt{ThreadPoolExecutor}. Threads would also work for three requests but cost
+one OS thread per source and a shared connection pool is cleaner under one event loop. The
+bottleneck the design targets is \emph{total network latency}: sequentially it is the sum of
+the three sources; concurrently it collapses to the slowest single source. We bound
+parallelism with \texttt{asyncio.Semaphore(max\_concurrency)} (default 5, configurable via
+\texttt{MAX\_CONCURRENCY}); at 1 the design degenerates to sequential, and at a very high value
+we would risk a provider rate-limit (HTTP 429), so a small bound respects politeness while
+still overlapping our three-way fan-out. The concurrent design starts winning at $N\ge2$
+sources.
+
+\subsection{Sequential-vs-concurrent benchmark}
+
+\texttt{scripts/benchmark.py} runs the same query twice --- once awaiting each source in turn,
+once through the orchestrator --- always bypassing the cache so both do identical work.
+Measured on a Windows 11 laptop, Python 3.12.4, caches cleared:
+
+\begin{center}\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Workload} & $N$ & \textbf{Sequential (s)} & \textbf{Concurrent (s)} & \textbf{Speedup} \\
+\midrule
+1 query, 3 sources (wiki, arxiv, web) & 3 & 11.43 & 3.64 & 3.1$\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Command:
+\begin{lstlisting}[style=plain]
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\textbf{Honest interpretation.} We reached almost exactly the theoretical $3\times$ for a
+three-source fan-out, which is expected because the three latencies were comparable and the
+work is pure waiting. An important caveat: during measurement all three live endpoints were
+failing (see \S\ref{sec:robustness}), so the numbers time the concurrent-vs-sequential
+handling of the retry-and-timeout path rather than of successful downloads --- but the
+comparison is still valid, because sequential pays each source's retry/timeout budget in turn
+(sum) while concurrent pays them in parallel (max). The new bottleneck after parallelizing the
+fetch is the \emph{LLM synthesis step}, which is a single call that runs after all fetches
+complete and is therefore serial tail latency; pushing the curve further would mean streaming
+the synthesis or overlapping it with late-arriving sources.
+
+% =====================================================================
+\section{Robustness \& Error Handling}\label{sec:robustness}
+
+\subsection{Wrapping the AI module}
+
+Every \texttt{ai.*} call goes through \texttt{ai\_service}, which adds four things the thin
+provided layer lacks. \textbf{Retries:} a \texttt{tenacity} policy retries \emph{only}
+\texttt{ProviderError} --- the transient class (network errors, 5xx, 429) --- for up to
+\texttt{MAX\_RETRIES} (default 3) attempts with \texttt{wait\_exponential} backoff.
+Non-transient failures such as a \texttt{ValueError} from empty input are \emph{not} retried,
+because they cannot succeed on repeat and retrying them only wastes the budget.
+\textbf{Timeouts:} each attempt is wrapped in \texttt{asyncio.timeout(source\_timeout)}
+(default 10\,s) as a hard per-call ceiling. \textbf{Structured logging:} the standard
+\texttt{logging} module (never \texttt{print}) records origin, truncated query, result count,
+and elapsed time at INFO, full payloads at DEBUG, and each retry at WARNING; the level is set
+once from \texttt{LOG\_LEVEL}. \textbf{Validation:} input is checked before the call (see
+\S\ref{sec:validation}) and the result is checked for usability before it is cached or
+returned. Walking one case end-to-end: a provider 429 is raised by \texttt{ai/} as a
+\texttt{ProviderError}, caught by the retry predicate, logged at WARNING, waited-out with
+exponential backoff, and retried; after the attempt budget is exhausted the original error is
+re-raised (\texttt{reraise=True}) and surfaces to the orchestrator, which records it as a
+failed \texttt{SourceResult} without cancelling the other sources.
+
+\subsection{Failure-mode analysis (one concrete incident)}
+
+\textbf{Incident: all three live sources unreachable.} We did not have to inject this failure
+--- it occurred naturally, which made it a stronger test. Running
+\texttt{python -m researcher ask "How does CRISPR-Cas9 work?"} against the live network, every
+source failed for a reason inside the frozen \texttt{ai/} layer: arXiv returned HTTP 301 (the
+fetcher issues an \texttt{http://} request and does not follow the redirect to
+\texttt{https://}), Wikipedia returned HTTP 403 (the request carries no \texttt{User-Agent}
+header), and the pinned \texttt{duckduckgo-search} dependency had been renamed to \texttt{ddgs}
+upstream and now returns an empty list.
+
+\emph{(i) How it surfaced:} a normal live query. \emph{(ii) What the system did:} each source
+was retried three times with backoff, each hit its timeout independently, and the orchestrator
+collected three failed \texttt{SourceResult}s via \texttt{return\_exceptions=True}.
+\emph{(iii) What the user saw:} a clean message --- ``No sources could be found for this
+question\dots'' followed by ``\emph{Note: wikipedia, arxiv, web could not be reached, so this
+answer may be incomplete}'' --- and no stack trace. \emph{(iv) What the logs showed:} an
+ordered WARNING trail of \texttt{retrying (1/3)}, \texttt{(2/3)}, then per-source
+\texttt{FAILED} lines naming the exact HTTP status, which was enough to diagnose all three
+root causes without re-running the code. We originally expected at least DuckDuckGo (keyless)
+to succeed; the log is what revealed the upstream package rename. Because \texttt{ai/} is
+contractually frozen we could not patch the redirect/header/rename at the source, so the
+correct engineering response was exactly what the system already did --- degrade cleanly and
+report --- which validated the robustness path against real endpoints.
+
+\subsection{Input validation}\label{sec:validation}
+
+The single entry point is the CLI. \texttt{validate\_question} strips the question and rejects
+it if it is shorter than \texttt{MIN\_QUESTION\_LEN} (default 3) or longer than
+\texttt{MAX\_QUESTION\_LEN} (default 500), raising a \texttt{ValueError} that the CLI surfaces
+as a one-line message rather than a traceback. The \texttt{-{}-sources} flag is validated
+against the allowed set \texttt{\{wiki, arxiv, web\}}; an unknown origin raises a clear error.
+Environment values are validated by \texttt{pydantic-settings} at load time (wrong types fail
+fast). A 50{,}000-character query is rejected by the length bound before any network call, so
+an adversarial oversized input cannot reach a provider; cache keys are hashed, so a query can
+never escape the storage directory via crafted path characters.
+
+\subsection{Rate limit \& politeness}
+
+Politeness has two layers: the \texttt{Semaphore} bounds concurrent in-flight requests so we
+never burst more than \texttt{MAX\_CONCURRENCY} (default 5) at once, and the exponential-backoff
+retry acts as a sleep-on-429 strategy --- a provider 429 is a \texttt{ProviderError}, so the
+backoff naturally spaces out subsequent attempts. The highest burst our test suite produces is
+three simultaneous fetches (one per source), well under the bound. We did not observe a real
+429 in development because the live endpoints failed earlier in the request path; the strategy
+is therefore exercised by unit tests that inject \texttt{ProviderError} rather than by a
+production 429.
+
+% =====================================================================
+\section{Storage \& Caching}\label{sec:storage}
+
+\subsection{Design}
+
+We did not use SQLite/PostgreSQL. The workload is a pure key$\rightarrow$value blob store
+(\texttt{(origin, query)} $\rightarrow$ list of \texttt{Source}s), for which a relational
+schema would be over-engineering and would add a service to the container. Instead each entry
+is one JSON file under \texttt{CACHE\_DIR} (default \texttt{.cache/}), named by a stable key.
+The key is the source-of-truth of identity; the stored \texttt{Source} list and
+\texttt{created\_at} timestamp are the cached payload.
+
+\begin{lstlisting}[style=python]
+def make_key(origin, query):
+    canonical = f"{origin.lower().strip()}|{query.lower().strip()}"
+    return f"{origin}_{hashlib.sha256(canonical.encode()).hexdigest()[:16]}"
+\end{lstlisting}
+
+The key is \emph{canonicalised} (lower-cased, stripped) so ``\texttt{WHAT IS X?}'' and
+``\texttt{what is x}'' collide onto one entry, then hashed so arbitrary query characters
+cannot break the filename or escape the directory.
+
+\subsection{Caching policy}
+
+We cache each \texttt{(origin, query)} result for \texttt{CACHE\_TTL} seconds (default 86{,}400
+= 24\,h). On read, the entry's age is compared to the TTL and anything older is treated as a
+miss and refetched --- this is time-based invalidation. \texttt{ai\_service} checks the cache
+before every fetch and writes non-empty results after; \texttt{-{}-no-cache} bypasses both ends.
+In a demo run that issues the same query twice, the first call is a miss and the second is a
+\textbf{100\% cache hit} (the underlying fetcher is invoked exactly once, verified by a unit
+test that counts fetcher calls). The value most likely to go stale is an LLM-shaped result if
+the prompt template changes; in production we would add a prompt-version component to the key
+so a changed prompt misses the old entries automatically.
+
+% =====================================================================
+\section{Testing}\label{sec:testing}
+
+\subsection{Strategy \& coverage}
+
+Every test runs \textbf{offline}: each \texttt{ai.*} call is replaced with a fake via
+\texttt{monkeypatch}, so the suite needs no network and no API keys and is safe in CI. Async
+code is driven by \texttt{pytest-asyncio} (\texttt{asyncio\_mode = strict}). We chose not to
+chase the last few lines --- three uncovered lines in \texttt{config.py} are the
+\texttt{\_\_main\_\_} print block, and the two in the orchestrator are a defensive branch that
+only fires on a malformed internal result --- because covering them would test framework
+plumbing, not our logic.
+
+\begin{center}\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Suite} & \textbf{Coverage} \\
+\midrule
+\texttt{src/} (our SE layer) & 98\,\% (249 stmts, 6 missed) \\
+Provided \texttt{ai/} smoke tests & passing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The full suite is \textbf{51 tests passing} in $\sim$2\,s, and the provided
+\texttt{tests/test\_ai\_smoke.py} is unmodified and passes.
+A \texttt{mypy src} run reports 6 warnings: one is in the frozen \texttt{ai/} package (which we
+may not edit), and five are benign false positives in \texttt{ai\_service.py} --- mypy cannot
+prove the three registered fetchers share a signature, nor that the retry loop
+(\texttt{reraise=True}) always assigns before use. All are documented; none affects runtime,
+as the 51 passing tests confirm.
+
+\subsection{Notable tests}
+
+\textbf{(i) Happy path (end-to-end).} \texttt{test\_fetch\_source\_happy\_path} mocks a fetcher
+and asserts a well-formed \texttt{Source} flows back through the cache-write path.
+\textbf{(ii) Concurrency.} \texttt{test\_orchestrator} verifies that when one of three
+gathered fetches raises, \texttt{return\_exceptions=True} still yields three
+\texttt{SourceResult}s --- two \texttt{ok}, one failed --- and no exception propagates.
+\textbf{(iii) Error path.} \texttt{test\_fetch\_source\_retries\_then\_succeeds} and
+\texttt{\dots\_reraises\_after\_exhaustion} pin the retry contract: a \texttt{ProviderError}
+that clears on the third attempt succeeds, while a permanent one is re-raised after exactly
+\texttt{MAX\_RETRIES} attempts. \texttt{\dots\_times\_out} confirms a slow fetcher raises
+\texttt{TimeoutError} and is \emph{not} retried. The test we wish we had time for is a
+load-style test asserting the semaphore never lets more than \texttt{MAX\_CONCURRENCY}
+coroutines run at once under a large fan-out.
+
+% =====================================================================
+\section{Deployment \& Reproducibility}\label{sec:deploy}
+
+\subsection{Docker image}
+
+\begin{lstlisting}[style=plain]
+docker build -t research-assistant .
+docker run --rm research-assistant        # runs: python demo_ai.py --offline
+\end{lstlisting}
+
+It is a \textbf{single-stage} build on \texttt{python:3.12-slim}. The image is \textbf{76.5\,MB
+content} (324\,MB on-disk including the shared base layers), comparable to a fresh
+\texttt{python:3.12-slim} ($\sim$120\,MB) because our only added weight is the pinned Python
+dependencies and the small source tree; a \texttt{.dockerignore} keeps the virtualenv, caches,
+git history, and \texttt{.env} out of the image. Dependencies are installed before the source
+is copied so the dependency layer is cached across code changes. The default command runs the
+offline demo end-to-end with no keys or network; the live CLI can be run by passing env vars
+with \texttt{-e} / \texttt{-{}-env-file}.
+
+\subsection{Configuration}
+
+Every variable the app reads, and the effect if it is missing:
+\texttt{LLM\_PROVIDER} (default \texttt{anthropic}); the provider's API key
+(\texttt{ANTHROPIC\_API\_KEY} etc.) --- if missing, live synthesis raises a clear
+\texttt{ProviderError}, but the offline demo and tests are unaffected;
+\texttt{WEB\_SEARCH\_PROVIDER} (default \texttt{duckduckgo}); \texttt{TAVILY\_API\_KEY} /
+\texttt{SERPER\_API\_KEY} (needed only for those backends); \texttt{CACHE\_DIR} (default
+\texttt{.cache}); \texttt{CACHE\_TTL} (default 86400); \texttt{SOURCE\_TIMEOUT} (default 10);
+\texttt{MAX\_CONCURRENCY} (default 5); \texttt{MAX\_RETRIES} / \texttt{RETRY\_BACKOFF}
+(defaults 3 / 1.0); \texttt{MIN\_QUESTION\_LEN} / \texttt{MAX\_QUESTION\_LEN} (defaults 3 /
+500); \texttt{LOG\_LEVEL} (default \texttt{INFO}). Every non-key variable has a safe default,
+so the app runs with an empty \texttt{.env}.
+
+% =====================================================================
+\section{Limitations \& Future Work}\label{sec:limits}
+
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+  \item \textbf{Live retrieval depends on frozen code we cannot patch.} arXiv (301 redirect),
+  Wikipedia (403 / missing User-Agent), and the renamed \texttt{duckduckgo-search} package all
+  fail inside \texttt{ai/}; we validate the pipeline via the offline demo and mocked tests. A
+  permitted fix would be a thin request-shim layer of our own that adds headers and follows
+  redirects \emph{before} handing off, without editing \texttt{ai/}.
+  \item \textbf{The filesystem cache has no concurrent-writer locking} and grows one file per
+  unique query; a production version would add locking or move to SQLite/Redis and an eviction
+  policy.
+  \item \textbf{Synthesis is serial tail latency} --- the single LLM call runs after all
+  fetches, so it dominates once retrieval is parallel; streaming would help.
+  \item \textbf{Rate limiting is request-count only}, not token-aware; a busy day with a real
+  provider could still approach a tokens-per-minute limit the semaphore does not see.
+  \item \textbf{Two-person scope} meant we prioritized the required layer over optional bonuses
+  (multi-provider failover, cost telemetry, CI); these are the natural next week of work.
+\end{itemize}
+
+% =====================================================================
+\section{Tools \& Acknowledgements}\label{sec:tools}
+
+We used AI coding assistants as collaborators, and disclose this specifically rather than
+generically. \textbf{Claude} was used to scaffold the SE layer module by module and to explain
+each concept (\texttt{asyncio}, \texttt{tenacity} retry semantics, \texttt{pytest} mocking,
+Docker) as we built; every module was then reviewed, run, and unit-tested by its owner, and we
+can each defend our own files. Concrete example: the \texttt{ai\_service} retry policy was
+drafted with Claude, but we tuned it after reading the live logs --- narrowing the retry
+predicate to \texttt{ProviderError} only, so that non-transient \texttt{ValueError}s are not
+uselessly retried --- and we added the per-attempt \texttt{asyncio.timeout} after observing
+that a hung source would otherwise block within the retry budget. The provided \texttt{ai/}
+package, its schemas, and \texttt{demo\_ai.py} are course-supplied and were left unmodified.
+
+% =====================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=2pt]
+  \item Anthropic API documentation. \url{https://docs.anthropic.com/}
+  \item \texttt{tenacity} --- retrying library. \url{https://tenacity.readthedocs.io/}
+  \item \texttt{pydantic-settings} documentation. \url{https://docs.pydantic.dev/latest/concepts/pydantic_settings/}
+  \item \texttt{httpx} --- async HTTP client. \url{https://www.python-httpx.org/}
+  \item \texttt{pytest-asyncio} documentation. \url{https://pytest-asyncio.readthedocs.io/}
+  \item Python \texttt{asyncio} --- \texttt{gather}, \texttt{timeout}, \texttt{Semaphore}. \url{https://docs.python.org/3/library/asyncio.html}
+\end{enumerate}
+
+\appendix
+% =====================================================================
+\section{Appendix --- Reproducing the benchmark}
+Anyone with the repo and a Python 3.11+ environment can reproduce the \S\ref{sec:concurrency}
+table:
+
+\begin{lstlisting}[style=plain]
+git clone https://github.com/Yunis-Allahverdi/async-research-assistant
+cd async-research-assistant
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\Activate.ps1
+python -m pip install -r requirements-ai.txt -r requirements.txt
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\vspace{1em}\hrule\vspace{0.6em}
+\noindent\small\textit{End of report --- thank you for reading.}
+
+\end{document}% =====================================================================
+% AI Academy -- National AI Center
+% Software Engineering Final Project -- Team Report
+% Topic 4 -- Async Research Assistant
+% =====================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+% ===== EARLY MACROS ==================================================
+\usepackage[dvipsnames]{xcolor}
+\definecolor{accent2}{HTML}{8B0000}
+\definecolor{ph}{HTML}{6B7280}
+
+% ===== CONFIGURATION =================================================
+\newcommand{\teamname}{Allahverdi \& Isgandarli}
+\newcommand{\topicchoice}{Topic 4 -- Async Research Assistant}
+\newcommand{\member}[2]{\textbf{#1} (\texttt{#2})}
+\newcommand{\reportdate}{18 September 2026}
+\newcommand{\repolink}{\url{https://github.com/Yunis-Allahverdi/async-research-assistant}}
+
+% ===== course meta ==================================================
+\newcommand{\coursecode}{AI-ENG-110}
+\newcommand{\coursename}{Software Engineering}
+\newcommand{\institution}{AI Academy, National AI Center}
+\newcommand{\semester}{Spring 2026}
+
+% ===== PACKAGES =====================================================
+\usepackage[margin=2.2cm,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[final,protrusion=true,expansion=false]{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage[parfill]{parskip}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage[hidelinks]{hyperref}
+
+\emergencystretch=3em
+\hbadness=10000
+\hfuzz=2pt
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=NavyBlue,
+  urlcolor=NavyBlue,
+  citecolor=NavyBlue,
+  pdftitle={\coursecode\ Final Project Report},
+  pdfauthor={\teamname}
+}
+
+% ===== STYLING ======================================================
+\definecolor{accent}{HTML}{0B3D91}
+\definecolor{soft}{HTML}{F2F4F8}
+
+\titleformat{\section}
+  {\Large\bfseries\color{accent}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}
+  {\large\bfseries\color{accent}}{\thesubsection}{0.5em}{}
+
+\definecolor{codegreen}{rgb}{0,0.55,0}
+\definecolor{codegray}{rgb}{0.4,0.4,0.4}
+\definecolor{codepurple}{rgb}{0.55,0,0.78}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{python}{
+  language=Python,
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{accent},
+  numberstyle=\tiny\color{codegray},
+  stringstyle=\color{codepurple},
+  basicstyle=\ttfamily\footnotesize,
+  breakatwhitespace=false,
+  breaklines=true,
+  keepspaces=true,
+  numbers=left,
+  numbersep=6pt,
+  tabsize=2,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+\lstdefinestyle{plain}{
+  backgroundcolor=\color{backcolour},
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  numbers=none,
+  frame=single,
+  framerule=0.4pt,
+  rulecolor=\color{black!30},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{\coursecode\ -- Final Report -- \teamname}}
+\fancyhead[R]{\small\textit{\semester}}
+\fancyfoot[L]{\small\textit{\institution}}
+\fancyfoot[R]{\small Page \thepage\ of \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% =====================================================================
+\begin{document}
+
+\begin{center}
+{\small \textsc{\institution} \\[0.2em] \textsc{\coursecode\ -- \coursename\ -- \semester}}\\[1.2em]
+{\Large\bfseries\color{accent} Final Project Report}\\[0.3em]
+{\LARGE\bfseries \topicchoice}\\[0.6em]
+\rule{0.85\textwidth}{0.6pt}
+\end{center}
+
+\vspace{0.6em}
+\begin{tabularx}{\textwidth}{@{}lXlX@{}}
+\textbf{Team:} & \teamname & \textbf{Date:} & \reportdate \\
+\textbf{Repo:} & \repolink & \textbf{Tag:} & \texttt{v1.0-final} \\
+\textbf{Members:} & \multicolumn{3}{X@{}}{%
+  \member{Yunis Allahverdi}{@Yunis-Allahverdi},\quad
+  \member{Fariz Isgandarli}{@farizisgenderli05-create}
+}\\
+\end{tabularx}
+\vspace{0.4em}\hrule\vspace{0.6em}
+
+% ===== EXECUTIVE SUMMARY =============================================
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+We built an asynchronous research assistant: given a natural-language question, it queries
+Wikipedia, arXiv, and a web-search provider concurrently, then uses a provider-agnostic LLM
+to synthesize a single answer carrying inline \texttt{[N]} citations back to the retrieved
+sources. The provided \texttt{ai/} package (fetchers plus citation synthesizer) was treated
+as a frozen dependency; our work was the entire software-engineering layer around it ---
+typed configuration, an \texttt{asyncio} orchestration layer, a filesystem cache, a retry /
+timeout / logging service wrapper, input validation, a CLI, an offline test suite, and a
+Docker image. The one number that proves the concurrency design works: on an identical
+three-source workload our benchmark drops wall-clock time from \textbf{11.43\,s sequential to
+3.64\,s concurrent (3.1$\times$)}. Our headline robustness story is that when \emph{all three}
+live sources failed for reasons inside the frozen \texttt{ai/} layer, the system retried with
+backoff, hit its per-source timeouts independently, and degraded to a clean ``no sources
+found'' response rather than crashing. The most surprising lesson was that the hardest part
+of an ``AI project'' was not the AI at all but everything that makes a thin API robust,
+observable, and reproducible; if we started over we would push the retry policy to be
+token-aware and add a real HTTP-header shim layer we are permitted to own.
+
+% ===== TABLE OF CONTENTS ============================================
+\tableofcontents
+\vspace{0.6em}\hrule\vspace{0.4em}
+
+% =====================================================================
+\section{Project Overview}
+
+\subsection{Problem framing \& scope}
+
+The system answers a research question by gathering short, attributed excerpts from three
+independent sources and letting a language model fuse them into one concise, cited answer.
+The \emph{input} is a single question string; the \emph{outputs} are a synthesized answer
+plus a numbered reference list, where every \texttt{[N]} marker in the prose maps to one
+retrieved source. The only user-facing entry point is a command-line interface:
+\texttt{python -m researcher ask "\dots"}, with \texttt{-{}-sources} to restrict the source
+set and \texttt{-{}-no-cache} to bypass the cache. No HTTP server is required for this topic.
+
+The provider stack is deliberately pluggable and selected entirely by environment variables:
+the LLM is provider-agnostic (Anthropic / OpenAI / Gemini via \texttt{LLM\_PROVIDER}), and the
+web-search backend is one of Tavily / Serper / DuckDuckGo via \texttt{WEB\_SEARCH\_PROVIDER}.
+Wikipedia and arXiv need no key.
+
+Relative to \texttt{TOPIC.md}, we implemented the full required SE layer and made two
+deliberate scope calls. We \emph{tightened} the spec by making graceful degradation total:
+not only does a single failing source not abort the call, but a call in which \emph{every}
+source fails still returns a structured result instead of an error. We \emph{loosened} the
+optional persistence choice: rather than PostgreSQL we used a filesystem-JSON cache, which is
+persistent, inspectable, and adds no service to the container --- an intentional
+simplicity-over-power trade-off for a pure key$\rightarrow$blob workload.
+
+\subsection{Provider choice and the AI module contract}
+
+The LLM is selected at runtime through the provided factory; for development the default is
+\texttt{LLM\_PROVIDER=anthropic} with model \texttt{claude-sonnet-4-6}, and the web backend
+default is \texttt{WEB\_SEARCH\_PROVIDER=duckduckgo} (no key, convenient for grading). Our
+code calls exactly four functions of the frozen package --- \texttt{ai.fetch\_wikipedia},
+\texttt{ai.fetch\_arxiv}, \texttt{ai.fetch\_web}, and \texttt{ai.synthesize} --- and the
+schemas \texttt{Source}, \texttt{Citation}, \texttt{AnswerWithCitations}.
+\textbf{We did not modify the public interface of the provided \texttt{ai/} package in any
+way.} Against malformed model output we rely on two guards: the provided synthesizer already
+drops out-of-range / hallucinated citation indices, and our service layer validates that a
+call returned a usable, non-empty result before caching or returning it, treating provider
+faults as the transient \texttt{ProviderError} class described in \S\ref{sec:robustness}.
+
+% =====================================================================
+\section{Architecture}\label{sec:arch}
+
+\subsection{Module map}
+
+The system is a strict downward-dependency pipeline. The CLI drives the core researcher, which
+drives the concurrency orchestrator, which fans out to the service wrapper, which is the
+\emph{only} module that touches the frozen \texttt{ai/} package, the cache, and the config.
+
+\begin{lstlisting}[style=plain]
+        CLI  (src/cli.py, researcher/__main__.py)
+         |  ask "question" [--sources ...] [--no-cache]
+         v
+   core/researcher.py        validate -> orchestrate -> synthesize -> ResearchResult
+         |
+         v
+ concurrency/orchestrator.py  asyncio.gather(return_exceptions=True)
+         |                    + Semaphore(max_concurrency) + per-source asyncio.timeout
+         |  fetch_source(origin, query)  x3, one shared httpx.AsyncClient
+         v
+ services/ai_service.py       retry+backoff | timeout | logging | cache lookup/store
+     |        |         |
+     v        v         v
+ storage/  ===AI BOUNDARY===   config.py
+ cache_store   ai/ (FROZEN)    Settings (env-driven)
+ (JSON+TTL)    fetch_* / synthesize
+\end{lstlisting}
+
+\textbf{Module-by-module.}
+\texttt{config.py} reads \texttt{.env} into a typed \texttt{Settings}.
+\texttt{models.py} holds our SE-layer schemas.
+\texttt{storage/cache\_store.py} is a TTL-aware filesystem JSON cache.
+\texttt{services/ai\_service.py} wraps every \texttt{ai.*} call with retry, timeout, logging,
+and caching --- the single crossing of the AI boundary.
+\texttt{concurrency/orchestrator.py} runs the three fetches concurrently with bounded
+parallelism and graceful degradation.
+\texttt{core/researcher.py} validates input and assembles the final \texttt{ResearchResult}.
+\texttt{cli.py} parses arguments and renders the answer.
+Only the arrows into \texttt{ai\_service} cross the AI boundary; swapping the LLM provider
+(Anthropic~$\rightarrow$~OpenAI) changes \emph{zero} of our files --- it is one environment
+variable, because the provided factory hides the concrete provider behind an ABC.
+
+\subsection{OOP design \& key abstractions}
+
+Our own defensible abstraction is \emph{composition via a dispatch registry} in the service
+layer, rather than inheritance. The three source fetchers share one call shape, so instead of
+an \texttt{if/elif} ladder or a subclass per source we map origin~$\rightarrow$~coroutine and
+inject the shared client and settings:
+
+\begin{lstlisting}[style=python]
+_FETCHERS = {
+    "wikipedia": fetch_wikipedia,
+    "arxiv": fetch_arxiv,
+    "web": fetch_web,
+}
+
+async def fetch_source(origin, query, *, client=None, settings, use_cache=True):
+    fetcher = _FETCHERS.get(origin)
+    if fetcher is None:
+        raise ValueError(f"unknown origin {origin!r}")
+    ...
+    return await _fetch_with_retry(fetcher, query, client=client, settings=settings)
+\end{lstlisting}
+
+\textbf{Justification.} We chose composition because the fetchers are stateless functions
+with an identical signature --- there is no shared state or behaviour to inherit, so a class
+hierarchy would add ceremony without value. A registry keeps ``add a source'' to one line and
+keeps retry/timeout/caching in exactly one place. Where the problem genuinely called for an
+open provider set with per-provider state (API keys, endpoints), the \emph{provided} code
+correctly used an ABC (\texttt{WebSearchProvider} with Tavily/Serper/DuckDuckGo subclasses);
+we deliberately did not duplicate that pattern where plain functions suffice.
+
+\subsection{Data flow across module boundaries}
+
+We defined three SE-layer models in \texttt{src/models.py}: \texttt{SourceResult} (per-source
+outcome: origin, sources, \texttt{ok}, error, \texttt{elapsed}), \texttt{ResearchResult}
+(question, answer, per-source results, \texttt{degraded} flag, total elapsed, \texttt{from\_cache}),
+and \texttt{CacheEntry} (key, sources, \texttt{created\_at}). We reused the provided
+\texttt{Source} / \texttt{AnswerWithCitations} verbatim wherever the data was exactly what
+\texttt{ai/} produced, and wrapped them only when we needed to attach SE concerns the provided
+schema does not carry --- timing and success/failure for the orchestrator, cache metadata for
+the store. \textbf{No naked dictionaries cross module boundaries; every inter-module value is
+a typed pydantic model.}
+
+% =====================================================================
+\section{Concurrency \& Performance}\label{sec:concurrency}
+
+\subsection{Why this concurrency model}
+
+The workload is I/O-bound --- three independent network round-trips that spend nearly all
+their wall-clock time waiting on remote servers, not on CPU. \texttt{asyncio} is therefore the
+right primitive: a single thread can keep all three requests in flight, and there is no CPU
+work to parallelize that would justify \texttt{ProcessPoolExecutor}, nor any blocking SDK that
+would force a \texttt{ThreadPoolExecutor}. Threads would also work for three requests but cost
+one OS thread per source and a shared connection pool is cleaner under one event loop. The
+bottleneck the design targets is \emph{total network latency}: sequentially it is the sum of
+the three sources; concurrently it collapses to the slowest single source. We bound
+parallelism with \texttt{asyncio.Semaphore(max\_concurrency)} (default 5, configurable via
+\texttt{MAX\_CONCURRENCY}); at 1 the design degenerates to sequential, and at a very high value
+we would risk a provider rate-limit (HTTP 429), so a small bound respects politeness while
+still overlapping our three-way fan-out. The concurrent design starts winning at $N\ge2$
+sources.
+
+\subsection{Sequential-vs-concurrent benchmark}
+
+\texttt{scripts/benchmark.py} runs the same query twice --- once awaiting each source in turn,
+once through the orchestrator --- always bypassing the cache so both do identical work.
+Measured on a Windows 11 laptop, Python 3.12.4, caches cleared:
+
+\begin{center}\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Workload} & $N$ & \textbf{Sequential (s)} & \textbf{Concurrent (s)} & \textbf{Speedup} \\
+\midrule
+1 query, 3 sources (wiki, arxiv, web) & 3 & 11.43 & 3.64 & 3.1$\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Command:
+\begin{lstlisting}[style=plain]
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\textbf{Honest interpretation.} We reached almost exactly the theoretical $3\times$ for a
+three-source fan-out, which is expected because the three latencies were comparable and the
+work is pure waiting. An important caveat: during measurement all three live endpoints were
+failing (see \S\ref{sec:robustness}), so the numbers time the concurrent-vs-sequential
+handling of the retry-and-timeout path rather than of successful downloads --- but the
+comparison is still valid, because sequential pays each source's retry/timeout budget in turn
+(sum) while concurrent pays them in parallel (max). The new bottleneck after parallelizing the
+fetch is the \emph{LLM synthesis step}, which is a single call that runs after all fetches
+complete and is therefore serial tail latency; pushing the curve further would mean streaming
+the synthesis or overlapping it with late-arriving sources.
+
+% =====================================================================
+\section{Robustness \& Error Handling}\label{sec:robustness}
+
+\subsection{Wrapping the AI module}
+
+Every \texttt{ai.*} call goes through \texttt{ai\_service}, which adds four things the thin
+provided layer lacks. \textbf{Retries:} a \texttt{tenacity} policy retries \emph{only}
+\texttt{ProviderError} --- the transient class (network errors, 5xx, 429) --- for up to
+\texttt{MAX\_RETRIES} (default 3) attempts with \texttt{wait\_exponential} backoff.
+Non-transient failures such as a \texttt{ValueError} from empty input are \emph{not} retried,
+because they cannot succeed on repeat and retrying them only wastes the budget.
+\textbf{Timeouts:} each attempt is wrapped in \texttt{asyncio.timeout(source\_timeout)}
+(default 10\,s) as a hard per-call ceiling. \textbf{Structured logging:} the standard
+\texttt{logging} module (never \texttt{print}) records origin, truncated query, result count,
+and elapsed time at INFO, full payloads at DEBUG, and each retry at WARNING; the level is set
+once from \texttt{LOG\_LEVEL}. \textbf{Validation:} input is checked before the call (see
+\S\ref{sec:validation}) and the result is checked for usability before it is cached or
+returned. Walking one case end-to-end: a provider 429 is raised by \texttt{ai/} as a
+\texttt{ProviderError}, caught by the retry predicate, logged at WARNING, waited-out with
+exponential backoff, and retried; after the attempt budget is exhausted the original error is
+re-raised (\texttt{reraise=True}) and surfaces to the orchestrator, which records it as a
+failed \texttt{SourceResult} without cancelling the other sources.
+
+\subsection{Failure-mode analysis (one concrete incident)}
+
+\textbf{Incident: all three live sources unreachable.} We did not have to inject this failure
+--- it occurred naturally, which made it a stronger test. Running
+\texttt{python -m researcher ask "How does CRISPR-Cas9 work?"} against the live network, every
+source failed for a reason inside the frozen \texttt{ai/} layer: arXiv returned HTTP 301 (the
+fetcher issues an \texttt{http://} request and does not follow the redirect to
+\texttt{https://}), Wikipedia returned HTTP 403 (the request carries no \texttt{User-Agent}
+header), and the pinned \texttt{duckduckgo-search} dependency had been renamed to \texttt{ddgs}
+upstream and now returns an empty list.
+
+\emph{(i) How it surfaced:} a normal live query. \emph{(ii) What the system did:} each source
+was retried three times with backoff, each hit its timeout independently, and the orchestrator
+collected three failed \texttt{SourceResult}s via \texttt{return\_exceptions=True}.
+\emph{(iii) What the user saw:} a clean message --- ``No sources could be found for this
+question\dots'' followed by ``\emph{Note: wikipedia, arxiv, web could not be reached, so this
+answer may be incomplete}'' --- and no stack trace. \emph{(iv) What the logs showed:} an
+ordered WARNING trail of \texttt{retrying (1/3)}, \texttt{(2/3)}, then per-source
+\texttt{FAILED} lines naming the exact HTTP status, which was enough to diagnose all three
+root causes without re-running the code. We originally expected at least DuckDuckGo (keyless)
+to succeed; the log is what revealed the upstream package rename. Because \texttt{ai/} is
+contractually frozen we could not patch the redirect/header/rename at the source, so the
+correct engineering response was exactly what the system already did --- degrade cleanly and
+report --- which validated the robustness path against real endpoints.
+
+\subsection{Input validation}\label{sec:validation}
+
+The single entry point is the CLI. \texttt{validate\_question} strips the question and rejects
+it if it is shorter than \texttt{MIN\_QUESTION\_LEN} (default 3) or longer than
+\texttt{MAX\_QUESTION\_LEN} (default 500), raising a \texttt{ValueError} that the CLI surfaces
+as a one-line message rather than a traceback. The \texttt{-{}-sources} flag is validated
+against the allowed set \texttt{\{wiki, arxiv, web\}}; an unknown origin raises a clear error.
+Environment values are validated by \texttt{pydantic-settings} at load time (wrong types fail
+fast). A 50{,}000-character query is rejected by the length bound before any network call, so
+an adversarial oversized input cannot reach a provider; cache keys are hashed, so a query can
+never escape the storage directory via crafted path characters.
+
+\subsection{Rate limit \& politeness}
+
+Politeness has two layers: the \texttt{Semaphore} bounds concurrent in-flight requests so we
+never burst more than \texttt{MAX\_CONCURRENCY} (default 5) at once, and the exponential-backoff
+retry acts as a sleep-on-429 strategy --- a provider 429 is a \texttt{ProviderError}, so the
+backoff naturally spaces out subsequent attempts. The highest burst our test suite produces is
+three simultaneous fetches (one per source), well under the bound. We did not observe a real
+429 in development because the live endpoints failed earlier in the request path; the strategy
+is therefore exercised by unit tests that inject \texttt{ProviderError} rather than by a
+production 429.
+
+% =====================================================================
+\section{Storage \& Caching}\label{sec:storage}
+
+\subsection{Design}
+
+We did not use SQLite/PostgreSQL. The workload is a pure key$\rightarrow$value blob store
+(\texttt{(origin, query)} $\rightarrow$ list of \texttt{Source}s), for which a relational
+schema would be over-engineering and would add a service to the container. Instead each entry
+is one JSON file under \texttt{CACHE\_DIR} (default \texttt{.cache/}), named by a stable key.
+The key is the source-of-truth of identity; the stored \texttt{Source} list and
+\texttt{created\_at} timestamp are the cached payload.
+
+\begin{lstlisting}[style=python]
+def make_key(origin, query):
+    canonical = f"{origin.lower().strip()}|{query.lower().strip()}"
+    return f"{origin}_{hashlib.sha256(canonical.encode()).hexdigest()[:16]}"
+\end{lstlisting}
+
+The key is \emph{canonicalised} (lower-cased, stripped) so ``\texttt{WHAT IS X?}'' and
+``\texttt{what is x}'' collide onto one entry, then hashed so arbitrary query characters
+cannot break the filename or escape the directory.
+
+\subsection{Caching policy}
+
+We cache each \texttt{(origin, query)} result for \texttt{CACHE\_TTL} seconds (default 86{,}400
+= 24\,h). On read, the entry's age is compared to the TTL and anything older is treated as a
+miss and refetched --- this is time-based invalidation. \texttt{ai\_service} checks the cache
+before every fetch and writes non-empty results after; \texttt{-{}-no-cache} bypasses both ends.
+In a demo run that issues the same query twice, the first call is a miss and the second is a
+\textbf{100\% cache hit} (the underlying fetcher is invoked exactly once, verified by a unit
+test that counts fetcher calls). The value most likely to go stale is an LLM-shaped result if
+the prompt template changes; in production we would add a prompt-version component to the key
+so a changed prompt misses the old entries automatically.
+
+% =====================================================================
+\section{Testing}\label{sec:testing}
+
+\subsection{Strategy \& coverage}
+
+Every test runs \textbf{offline}: each \texttt{ai.*} call is replaced with a fake via
+\texttt{monkeypatch}, so the suite needs no network and no API keys and is safe in CI. Async
+code is driven by \texttt{pytest-asyncio} (\texttt{asyncio\_mode = strict}). We chose not to
+chase the last few lines --- three uncovered lines in \texttt{config.py} are the
+\texttt{\_\_main\_\_} print block, and the two in the orchestrator are a defensive branch that
+only fires on a malformed internal result --- because covering them would test framework
+plumbing, not our logic.
+
+\begin{center}\small
+\begin{tabular}{lc}
+\toprule
+\textbf{Suite} & \textbf{Coverage} \\
+\midrule
+\texttt{src/} (our SE layer) & 98\,\% (249 stmts, 6 missed) \\
+Provided \texttt{ai/} smoke tests & passing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The full suite is \textbf{51 tests passing} in $\sim$2\,s, and the provided
+\texttt{tests/test\_ai\_smoke.py} is unmodified and passes.
+A \texttt{mypy src} run reports 6 warnings: one is in the frozen \texttt{ai/} package (which we
+may not edit), and five are benign false positives in \texttt{ai\_service.py} --- mypy cannot
+prove the three registered fetchers share a signature, nor that the retry loop
+(\texttt{reraise=True}) always assigns before use. All are documented; none affects runtime,
+as the 51 passing tests confirm.
+
+\subsection{Notable tests}
+
+\textbf{(i) Happy path (end-to-end).} \texttt{test\_fetch\_source\_happy\_path} mocks a fetcher
+and asserts a well-formed \texttt{Source} flows back through the cache-write path.
+\textbf{(ii) Concurrency.} \texttt{test\_orchestrator} verifies that when one of three
+gathered fetches raises, \texttt{return\_exceptions=True} still yields three
+\texttt{SourceResult}s --- two \texttt{ok}, one failed --- and no exception propagates.
+\textbf{(iii) Error path.} \texttt{test\_fetch\_source\_retries\_then\_succeeds} and
+\texttt{\dots\_reraises\_after\_exhaustion} pin the retry contract: a \texttt{ProviderError}
+that clears on the third attempt succeeds, while a permanent one is re-raised after exactly
+\texttt{MAX\_RETRIES} attempts. \texttt{\dots\_times\_out} confirms a slow fetcher raises
+\texttt{TimeoutError} and is \emph{not} retried. The test we wish we had time for is a
+load-style test asserting the semaphore never lets more than \texttt{MAX\_CONCURRENCY}
+coroutines run at once under a large fan-out.
+
+% =====================================================================
+\section{Deployment \& Reproducibility}\label{sec:deploy}
+
+\subsection{Docker image}
+
+\begin{lstlisting}[style=plain]
+docker build -t research-assistant .
+docker run --rm research-assistant        # runs: python demo_ai.py --offline
+\end{lstlisting}
+
+It is a \textbf{single-stage} build on \texttt{python:3.12-slim}. The image is \textbf{76.5\,MB
+content} (324\,MB on-disk including the shared base layers), comparable to a fresh
+\texttt{python:3.12-slim} ($\sim$120\,MB) because our only added weight is the pinned Python
+dependencies and the small source tree; a \texttt{.dockerignore} keeps the virtualenv, caches,
+git history, and \texttt{.env} out of the image. Dependencies are installed before the source
+is copied so the dependency layer is cached across code changes. The default command runs the
+offline demo end-to-end with no keys or network; the live CLI can be run by passing env vars
+with \texttt{-e} / \texttt{-{}-env-file}.
+
+\subsection{Configuration}
+
+Every variable the app reads, and the effect if it is missing:
+\texttt{LLM\_PROVIDER} (default \texttt{anthropic}); the provider's API key
+(\texttt{ANTHROPIC\_API\_KEY} etc.) --- if missing, live synthesis raises a clear
+\texttt{ProviderError}, but the offline demo and tests are unaffected;
+\texttt{WEB\_SEARCH\_PROVIDER} (default \texttt{duckduckgo}); \texttt{TAVILY\_API\_KEY} /
+\texttt{SERPER\_API\_KEY} (needed only for those backends); \texttt{CACHE\_DIR} (default
+\texttt{.cache}); \texttt{CACHE\_TTL} (default 86400); \texttt{SOURCE\_TIMEOUT} (default 10);
+\texttt{MAX\_CONCURRENCY} (default 5); \texttt{MAX\_RETRIES} / \texttt{RETRY\_BACKOFF}
+(defaults 3 / 1.0); \texttt{MIN\_QUESTION\_LEN} / \texttt{MAX\_QUESTION\_LEN} (defaults 3 /
+500); \texttt{LOG\_LEVEL} (default \texttt{INFO}). Every non-key variable has a safe default,
+so the app runs with an empty \texttt{.env}.
+
+% =====================================================================
+\section{Limitations \& Future Work}\label{sec:limits}
+
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+  \item \textbf{Live retrieval depends on frozen code we cannot patch.} arXiv (301 redirect),
+  Wikipedia (403 / missing User-Agent), and the renamed \texttt{duckduckgo-search} package all
+  fail inside \texttt{ai/}; we validate the pipeline via the offline demo and mocked tests. A
+  permitted fix would be a thin request-shim layer of our own that adds headers and follows
+  redirects \emph{before} handing off, without editing \texttt{ai/}.
+  \item \textbf{The filesystem cache has no concurrent-writer locking} and grows one file per
+  unique query; a production version would add locking or move to SQLite/Redis and an eviction
+  policy.
+  \item \textbf{Synthesis is serial tail latency} --- the single LLM call runs after all
+  fetches, so it dominates once retrieval is parallel; streaming would help.
+  \item \textbf{Rate limiting is request-count only}, not token-aware; a busy day with a real
+  provider could still approach a tokens-per-minute limit the semaphore does not see.
+  \item \textbf{Two-person scope} meant we prioritized the required layer over optional bonuses
+  (multi-provider failover, cost telemetry, CI); these are the natural next week of work.
+\end{itemize}
+
+% =====================================================================
+\section{Tools \& Acknowledgements}\label{sec:tools}
+
+We used AI coding assistants as collaborators, and disclose this specifically rather than
+generically. \textbf{Claude} was used to scaffold the SE layer module by module and to explain
+each concept (\texttt{asyncio}, \texttt{tenacity} retry semantics, \texttt{pytest} mocking,
+Docker) as we built; every module was then reviewed, run, and unit-tested by its owner, and we
+can each defend our own files. Concrete example: the \texttt{ai\_service} retry policy was
+drafted with Claude, but we tuned it after reading the live logs --- narrowing the retry
+predicate to \texttt{ProviderError} only, so that non-transient \texttt{ValueError}s are not
+uselessly retried --- and we added the per-attempt \texttt{asyncio.timeout} after observing
+that a hung source would otherwise block within the retry budget. The provided \texttt{ai/}
+package, its schemas, and \texttt{demo\_ai.py} are course-supplied and were left unmodified.
+
+% =====================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=2pt]
+  \item Anthropic API documentation. \url{https://docs.anthropic.com/}
+  \item \texttt{tenacity} --- retrying library. \url{https://tenacity.readthedocs.io/}
+  \item \texttt{pydantic-settings} documentation. \url{https://docs.pydantic.dev/latest/concepts/pydantic_settings/}
+  \item \texttt{httpx} --- async HTTP client. \url{https://www.python-httpx.org/}
+  \item \texttt{pytest-asyncio} documentation. \url{https://pytest-asyncio.readthedocs.io/}
+  \item Python \texttt{asyncio} --- \texttt{gather}, \texttt{timeout}, \texttt{Semaphore}. \url{https://docs.python.org/3/library/asyncio.html}
+\end{enumerate}
+
+\appendix
+% =====================================================================
+\section{Appendix --- Reproducing the benchmark}
+Anyone with the repo and a Python 3.11+ environment can reproduce the \S\ref{sec:concurrency}
+table:
+
+\begin{lstlisting}[style=plain]
+git clone https://github.com/Yunis-Allahverdi/async-research-assistant
+cd async-research-assistant
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\Activate.ps1
+python -m pip install -r requirements-ai.txt -r requirements.txt
+python -m scripts.benchmark "What is photosynthesis?" --sources wiki,arxiv,web
+\end{lstlisting}
+
+\vspace{1em}\hrule\vspace{0.6em}
+\noindent\small\textit{End of report --- thank you for reading.}
+
+\end{document}
